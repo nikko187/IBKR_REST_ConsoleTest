@@ -33,10 +33,11 @@ namespace IBKR_Rest_Sample
                 client.DefaultRequestHeaders.Add("User-Agent", "Console");
 
                 List<KeyValuePair<string, string>> postData = new List<KeyValuePair<string, string>>();
-                postData.Add(new KeyValuePair<string, string>("symbol", "MSFT"));
+                postData.Add(new KeyValuePair<string, string>("symbol", "SPY"));
                 postData.Add(new KeyValuePair<string, string>("name", "true"));
                 postData.Add(new KeyValuePair<string, string>("secType", "STK"));
                 FormUrlEncodedContent content = new FormUrlEncodedContent(postData);
+
                 var request = new HttpRequestMessage(HttpMethod.Post, baseURL + routeSymbolSearch)
                 {
                     Method = HttpMethod.Post,
@@ -46,6 +47,7 @@ namespace IBKR_Rest_Sample
                 var response = await client.SendAsync(request);
                 string result = response.Content.ReadAsStringAsync().Result;
                 Console.WriteLine(result);
+                Console.ReadLine();
 
             }
             catch (Exception ex)
