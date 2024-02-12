@@ -10,11 +10,12 @@ using System.Text;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using Newtonsoft.Json;
+using IBKR_REST_ConsoleTest;
 
 
 namespace IBKR_Rest_Sample
 {
-    class Program
+    public class Program
     {
         public static Uri BaseUri = new Uri(baseURL);
         public const string baseURL = "https://localhost:5000/v1/api";
@@ -33,7 +34,7 @@ namespace IBKR_Rest_Sample
                 client.DefaultRequestHeaders.Add("User-Agent", "Console");
 
                 List<KeyValuePair<string, string>> postData = new List<KeyValuePair<string, string>>();
-                postData.Add(new KeyValuePair<string, string>("symbol", "SPY"));
+                postData.Add(new KeyValuePair<string, string>("symbol", "AAPL"));
                 postData.Add(new KeyValuePair<string, string>("name", "true"));
                 postData.Add(new KeyValuePair<string, string>("secType", "STK"));
                 FormUrlEncodedContent content = new FormUrlEncodedContent(postData);
@@ -47,6 +48,11 @@ namespace IBKR_Rest_Sample
                 var response = await client.SendAsync(request);
                 string result = response.Content.ReadAsStringAsync().Result;
                 Console.WriteLine(result);
+                var jsonDS = JsonConvert.DeserializeObject(result);
+
+                
+                Console.WriteLine(jsonDS);
+                
                 Console.ReadLine();
 
             }
@@ -55,6 +61,43 @@ namespace IBKR_Rest_Sample
                 Console.WriteLine(ex.Message);
             }
         }
+    }
+
+    public class SecDef
+    {
+        public Class1[] Property1 { get; set; }
+    }
+
+    public class Class1
+    {
+        public string conid { get; set; }
+        public string companyHeader { get; set; }
+        public string companyName { get; set; }
+        public string symbol { get; set; }
+        public string description { get; set; }
+        public string restricted { get; set; }
+        public object fop { get; set; }
+        public string opt { get; set; }
+        public string war { get; set; }
+        public Section[] sections { get; set; }
+        public string secType { get; set; }
+        public Issuer[] issuers { get; set; }
+        public int bondid { get; set; }
+    }
+
+    public class Section
+    {
+        public string secType { get; set; }
+        public string exchange { get; set; }
+        public string months { get; set; }
+        public string conid { get; set; }
+    }
+
+    public class Issuer
+    {
+        public string id { get; set; }
+        public string name { get; set; }
+    }
 
         /*private static void AttemptA()
         {
@@ -87,5 +130,5 @@ namespace IBKR_Rest_Sample
             
         }*/
 
-    }
+    
 }
