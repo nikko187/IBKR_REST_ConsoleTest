@@ -24,11 +24,14 @@ namespace IBKR_REST_ConsoleTest
         public const string routeAuthStatus = "/iserver/auth/status";
         public const string routeSnapshot = "/md/snapshot";
         public const string routeTickle = "/tickle";
+        public const string routeWS = "/ws";
         
 
         static async Task Main(string[] args)
         {
             int conID = 0;
+            string symbolName = "";
+            string session = "";
             try
             {
                 Console.WriteLine("Hello World!");
@@ -38,6 +41,7 @@ namespace IBKR_REST_ConsoleTest
                 var client = new HttpClient(handler);
                 client.DefaultRequestHeaders.Add("User-Agent", "Console");
 
+                // ####### GET CONTRACT INFO ####### //
                 List<KeyValuePair<string, string>> postData = new List<KeyValuePair<string, string>>();
                 postData.Add(new KeyValuePair<string, string>("symbol", "AAPL"));
                 postData.Add(new KeyValuePair<string, string>("name", "true"));
@@ -55,11 +59,12 @@ namespace IBKR_REST_ConsoleTest
                 if (response.IsSuccessStatusCode)
                 {
                     var result = response.Content.ReadAsStringAsync().Result;
-                    Console.WriteLine(result);
+                    //Console.WriteLine(result);
 
                     var postResponse = JsonConvert.DeserializeObject<List<SecDef>>(result);
                     conID = postResponse[0].conid;
-                    Console.WriteLine("\n" + conID);    // How do I get the "conid" from the response??
+                    symbolName = postResponse[0].companyName;
+                    Console.WriteLine("\n" + conID + "\n" + symbolName);
 
                 }
                 else
@@ -67,6 +72,7 @@ namespace IBKR_REST_ConsoleTest
                     Console.WriteLine("ERROR: " + response.StatusCode);
                 }
 
+                // ####### TICKLE SERVER FOR AUTHENTICATION AND SESSION ###### //
                 List<KeyValuePair<string, string>> postTickle = new List<KeyValuePair<string, string>>();
                 postTickle.Add(new KeyValuePair<string, string>("", ""));
                 FormUrlEncodedContent contentTickle = new FormUrlEncodedContent(postTickle);
@@ -80,14 +86,38 @@ namespace IBKR_REST_ConsoleTest
                 if (response.IsSuccessStatusCode)
                 {
                     var result2 = response2.Content.ReadAsStringAsync().Result;
-                    Console.WriteLine(result2);
+
+                    var jsonTickle = JsonConvert.DeserializeObject<Tickle>(result2);
+                    Console.WriteLine(jsonTickle.session);
+                    session = jsonTickle.session;
                 }
                 else
                 {
                     Console.WriteLine("ERROR: " + response2.StatusCode);
                 }
 
+                // ########## WEBSOCKET DATA STREAM ######## //
+                List<KeyValuePair<string, string>> wsSession = new List<KeyValuePair<string, string>>();
+                wsSession.Add(new KeyValuePair<string, string>("session", session));
+                FormUrlEncodedContent contentWS = new FormUrlEncodedContent(wsSession);
 
+                
+                var streamRequest = new HttpRequestMessage(HttpMethod.Post, baseURL + routeWS)
+                {
+                    Method = HttpMethod.Post,
+                    Content = contentWS
+                };
+
+                var streamResponse = await client.SendAsync(streamRequest);
+                if (streamResponse.IsSuccessStatusCode)
+                {
+                    var streamResult = streamResponse.Content.ReadAsStringAsync().Result;
+                    Console.WriteLine(streamResult);
+                }
+                else
+                {
+                    Console.WriteLine("ERROR: " +  streamResponse.StatusCode);
+                }
             }
             catch (Exception ex)
             {
