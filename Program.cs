@@ -10,20 +10,25 @@ using System.Text;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using Newtonsoft.Json;
-using IBKR_REST_ConsoleTest;
+using System.Reflection.Metadata;
 
 
-namespace IBKR_Rest_Sample
+namespace IBKR_REST_ConsoleTest
 {
     public class Program
     {
         public static Uri BaseUri = new Uri(baseURL);
         public const string baseURL = "https://localhost:5000/v1/api";
+        public const string streamingURL = "wss://localhost:5000/v1/api/ws";
         public const string routeSymbolSearch = "/iserver/secdef/search";
         public const string routeAuthStatus = "/iserver/auth/status";
+        public const string routeSnapshot = "/md/snapshot";
+        public const string routeTickle = "/tickle";
+        
 
         static async Task Main(string[] args)
         {
+            int conID = 0;
             try
             {
                 Console.WriteLine("Hello World!");
@@ -52,20 +57,43 @@ namespace IBKR_Rest_Sample
                     var result = response.Content.ReadAsStringAsync().Result;
                     Console.WriteLine(result);
 
-                    var postResponse = JsonConvert.DeserializeObject<Class1>(result);
-                    Console.WriteLine(postResponse.conid);    // How do I get the "conid" from the response??
+                    var postResponse = JsonConvert.DeserializeObject<List<SecDef>>(result);
+                    conID = postResponse[0].conid;
+                    Console.WriteLine("\n" + conID);    // How do I get the "conid" from the response??
+
                 }
                 else
                 {
-                    Console.WriteLine(response.StatusCode);
+                    Console.WriteLine("ERROR: " + response.StatusCode);
                 }
-                
-                Console.ReadLine();
+
+                List<KeyValuePair<string, string>> postTickle = new List<KeyValuePair<string, string>>();
+                postTickle.Add(new KeyValuePair<string, string>("", ""));
+                FormUrlEncodedContent contentTickle = new FormUrlEncodedContent(postTickle);
+
+                var request2 = new HttpRequestMessage(HttpMethod.Post, baseURL + routeTickle)
+                {
+                    Method = HttpMethod.Post,
+                };
+                var response2 = await client.SendAsync(request2);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var result2 = response2.Content.ReadAsStringAsync().Result;
+                    Console.WriteLine(result2);
+                }
+                else
+                {
+                    Console.WriteLine("ERROR: " + response2.StatusCode);
+                }
+
+
             }
             catch (Exception ex)
             {
                 Console.WriteLine(ex.Message);
             }
+            Console.ReadLine();
         }
     }
 
