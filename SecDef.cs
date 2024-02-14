@@ -11,7 +11,7 @@ namespace IBKR_REST_ConsoleTest
     public class SecDef
     {
         [JsonProperty("conid")]
-        public int conid { get; set; }
+        public string conid { get; set; }
 
         [JsonProperty("companyHeader")]
         public string companyHeader { get; set; }

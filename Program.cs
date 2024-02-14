@@ -11,27 +11,32 @@ using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using Newtonsoft.Json;
 using System.Reflection.Metadata;
-
+using WebSocketSharp;
+using WebSocketSharp.Net.WebSockets;
+using System.Net.Mail;
 
 namespace IBKR_REST_ConsoleTest
 {
     public class Program
     {
         public static Uri BaseUri = new Uri(baseURL);
+        public static Uri socketUri = new Uri(streamingURL);
         public const string baseURL = "https://localhost:5000/v1/api";
         public const string streamingURL = "wss://localhost:5000/v1/api/ws";
-        public const string routeSymbolSearch = "/iserver/secdef/search";
+        public const string routeSymbolSearch = "/iserver/secdef/search";   //POST
         public const string routeAuthStatus = "/iserver/auth/status";
+        public const string routeReauth = "/iserver/reauthenticate";        //POST
         public const string routeSnapshot = "/md/snapshot";
-        public const string routeTickle = "/tickle";
-        public const string routeWS = "/ws";
-        
+        public const string routeTickle = "/tickle";                        //POST
+        public const string routeSSO = "/sso/validate";                     //GET
+        public static WebSocket ws;
+        public static string conID = "";
 
         static async Task Main(string[] args)
-        {
-            int conID = 0;
+        {         
             string symbolName = "";
             string session = "";
+            ServicePointManager.ServerCertificateValidationCallback += (sender, cert, chain, sslPolicyErrors) => { return true; };
             try
             {
                 Console.WriteLine("Hello World!");
@@ -41,9 +46,58 @@ namespace IBKR_REST_ConsoleTest
                 var client = new HttpClient(handler);
                 client.DefaultRequestHeaders.Add("User-Agent", "Console");
 
+                // ### RE-AUTH FOR GOOD MEASURE ### //
+                List<KeyValuePair<string, string>> getSSO = new List<KeyValuePair<string, string>>();
+                getSSO.Add(new KeyValuePair<string, string>("", ""));
+                FormUrlEncodedContent contentSSO = new FormUrlEncodedContent(getSSO);
+
+                var requestAuth = new HttpRequestMessage(HttpMethod.Get, baseURL + routeSSO)
+                {
+                    Method = HttpMethod.Get,
+                    Content = contentSSO
+                };
+                var responseAuth = await client.SendAsync(requestAuth);
+
+                if (responseAuth.IsSuccessStatusCode)
+                {
+                    var resultAuth = responseAuth.Content.ReadAsStringAsync().Result;
+
+                    var jsonAuth = JsonConvert.DeserializeObject<SSOValidate>(resultAuth);
+                    Console.WriteLine(jsonAuth.RESULT);
+                }
+                else
+                {
+                    Console.WriteLine("ERROR: " + responseAuth.StatusCode);
+                }
+
+                // ####### TICKLE SERVER FOR AUTHENTICATION AND SESSION ###### //
+                List<KeyValuePair<string, string>> postTickle = new List<KeyValuePair<string, string>>();
+                postTickle.Add(new KeyValuePair<string, string>("", ""));
+                FormUrlEncodedContent contentTickle = new FormUrlEncodedContent(postTickle);
+
+                var request2 = new HttpRequestMessage(HttpMethod.Post, baseURL + routeTickle)
+                {
+                    Method = HttpMethod.Post,
+                };
+                var response2 = await client.SendAsync(request2);
+
+                if (response2.IsSuccessStatusCode)
+                {
+                    var result2 = response2.Content.ReadAsStringAsync().Result;
+
+                    var jsonTickle = JsonConvert.DeserializeObject<Tickle>(result2);
+                    Console.WriteLine(jsonTickle.session);
+                    session = jsonTickle.session;
+                }
+                else
+                {
+                    Console.WriteLine("ERROR: " + response2.StatusCode);
+                }
+
+
                 // ####### GET CONTRACT INFO ####### //
                 List<KeyValuePair<string, string>> postData = new List<KeyValuePair<string, string>>();
-                postData.Add(new KeyValuePair<string, string>("symbol", "AAPL"));
+                postData.Add(new KeyValuePair<string, string>("symbol", "TWLO"));
                 postData.Add(new KeyValuePair<string, string>("name", "true"));
                 postData.Add(new KeyValuePair<string, string>("secType", "STK"));
                 FormUrlEncodedContent content = new FormUrlEncodedContent(postData);
@@ -72,58 +126,50 @@ namespace IBKR_REST_ConsoleTest
                     Console.WriteLine("ERROR: " + response.StatusCode);
                 }
 
-                // ####### TICKLE SERVER FOR AUTHENTICATION AND SESSION ###### //
-                List<KeyValuePair<string, string>> postTickle = new List<KeyValuePair<string, string>>();
-                postTickle.Add(new KeyValuePair<string, string>("", ""));
-                FormUrlEncodedContent contentTickle = new FormUrlEncodedContent(postTickle);
 
-                var request2 = new HttpRequestMessage(HttpMethod.Post, baseURL + routeTickle)
-                {
-                    Method = HttpMethod.Post,
-                };
-                var response2 = await client.SendAsync(request2);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    var result2 = response2.Content.ReadAsStringAsync().Result;
-
-                    var jsonTickle = JsonConvert.DeserializeObject<Tickle>(result2);
-                    Console.WriteLine(jsonTickle.session);
-                    session = jsonTickle.session;
-                }
-                else
-                {
-                    Console.WriteLine("ERROR: " + response2.StatusCode);
-                }
-
-                // ########## WEBSOCKET DATA STREAM ######## //
+                // ########## WEBSOCKET DATA STREAM ########## //  SCOPED
                 List<KeyValuePair<string, string>> wsSession = new List<KeyValuePair<string, string>>();
                 wsSession.Add(new KeyValuePair<string, string>("session", session));
                 FormUrlEncodedContent contentWS = new FormUrlEncodedContent(wsSession);
 
-                
-                var streamRequest = new HttpRequestMessage(HttpMethod.Post, baseURL + routeWS)
+                var wsStream = new WebsocketStream
                 {
-                    Method = HttpMethod.Post,
-                    Content = contentWS
+                    fields = "[31]"
                 };
+                string smdJson = JsonConvert.SerializeObject(wsStream);
 
-                var streamResponse = await client.SendAsync(streamRequest);
-                if (streamResponse.IsSuccessStatusCode)
-                {
-                    var streamResult = streamResponse.Content.ReadAsStringAsync().Result;
-                    Console.WriteLine(streamResult);
-                }
-                else
-                {
-                    Console.WriteLine("ERROR: " +  streamResponse.StatusCode);
-                }
+                ws = new WebSocketSharp.WebSocket(streamingURL);
+
+                ws.SslConfiguration.EnabledSslProtocols = System.Security.Authentication.SslProtocols.None;
+
+                ws.Connect();
+                ws.Send("smd+" + conID + "+{\"fields\":[\"31\"]}");
+                ws.OnOpen += Ws_OnOpen;
+                ws.OnMessage += Ws_OnMessage;
+                ws.OnError += Ws_OnError;
+                
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.Message);
+                Console.WriteLine("ERROR: " + ex.Message);
             }
             Console.ReadLine();
+        }
+
+        private static void Ws_OnOpen(object sender, EventArgs e)
+        {
+            Console.WriteLine(" ## CONNECTION OPEN ## " + e);
+            string data = "smd+" + conID + "+{\"fields\":[\"31\"]}";
+
+        }
+
+        private static void Ws_OnMessage(object sender, WebSocketSharp.MessageEventArgs e)
+        {
+            Console.WriteLine("DATA: " + sender +  e.Data);
+        }
+        private static void Ws_OnError(object sender, WebSocketSharp.ErrorEventArgs e)
+        {
+            Console.WriteLine("WS_ERROR: " + e.Message);
         }
     }
 
