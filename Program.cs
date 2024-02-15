@@ -29,7 +29,7 @@ namespace IBKR_REST_ConsoleTest
         public const string routeSnapshot = "/md/snapshot";
         public const string routeTickle = "/tickle";                        //POST
         public const string routeSSO = "/sso/validate";                     //GET
-        public static WebSocket ws;
+
         public static string conID = "";
 
         static async Task Main(string[] args)
@@ -138,8 +138,8 @@ namespace IBKR_REST_ConsoleTest
                 };
                 string smdJson = JsonConvert.SerializeObject(wsStream);
 
-                ws = new WebSocketSharp.WebSocket(streamingURL);
-
+                WebSocket ws = new WebSocket(streamingURL);
+                
                 ws.SslConfiguration.EnabledSslProtocols = System.Security.Authentication.SslProtocols.None;
 
                 ws.Connect();
@@ -165,7 +165,7 @@ namespace IBKR_REST_ConsoleTest
 
         private static void Ws_OnMessage(object sender, WebSocketSharp.MessageEventArgs e)
         {
-            Console.WriteLine("DATA: " + sender +  e.Data);
+            Console.WriteLine("DATA: " + e.Data);
         }
         private static void Ws_OnError(object sender, WebSocketSharp.ErrorEventArgs e)
         {
